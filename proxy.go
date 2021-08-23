@@ -3,8 +3,37 @@ package proxy
 import (
 	"crypto/tls"
 	"io"
+	"math/rand"
 	"net"
+	"time"
 )
+
+type IntRange struct {
+	min, max int
+	r        *rand.Rand
+}
+
+func NewIntRange(min, max int) *IntRange {
+	r := rand.New(rand.NewSource(55))
+	if min < 0 {
+		min = 0
+	}
+	if max < 0 {
+		max = 0
+	}
+	if min > max {
+		return &IntRange{min: max, max: min, r: r}
+	}
+	return &IntRange{min: min, max: max, r: r}
+}
+
+// get next random value within the interval including min and max
+func (ir *IntRange) Random() int {
+	if ir.min == ir.max {
+		return ir.min
+	}
+	return ir.r.Intn(ir.max-ir.min+1) + ir.min
+}
 
 // Proxy - Manages a Proxy connection, piping data between local and remote.
 type Proxy struct {
@@ -24,6 +53,10 @@ type Proxy struct {
 	Nagles    bool
 	Log       Logger
 	OutputHex bool
+
+	Timeout     *IntRange
+	TimeoutSize int
+	timeoutSize int
 }
 
 // New - Create a new Proxy instance. Takes over local connection passed in,
@@ -123,6 +156,16 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 	//directional copy (64k buffer)
 	buff := make([]byte, 0xffff)
 	for {
+		if p.TimeoutSize > 0 && p.timeoutSize >= p.TimeoutSize {
+			// inject next read timeout
+			timeout := p.Timeout.Random()
+			if timeout > 0 {
+				p.Log.Info("Timeout %v ms after write %d bytes", timeout, p.timeoutSize)
+				time.Sleep(time.Duration(timeout * int(time.Millisecond)))
+			}
+			p.timeoutSize = 0
+		}
+
 		n, err := src.Read(buff)
 		if err != nil {
 			p.err("Read failed '%s'\n", err)
@@ -155,5 +198,7 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 		} else {
 			p.receivedBytes += uint64(n)
 		}
+
+		p.timeoutSize += n
 	}
 }

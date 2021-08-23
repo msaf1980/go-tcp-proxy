@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	proxy "github.com/jpillora/go-tcp-proxy"
+	proxy "github.com/msaf1980/go-tcp-proxy"
 )
 
 var (
@@ -27,6 +27,10 @@ var (
 	unwrapTLS   = flag.Bool("unwrap-tls", false, "remote connection with TLS exposed unencrypted locally")
 	match       = flag.String("match", "", "match regex (in the form 'regex')")
 	replace     = flag.String("replace", "", "replace regex (in the form 'regex~replacer')")
+
+	timeoutMin  = flag.Int("tmin", 0, "minimal injected timeout for proxying request (ms)")
+	timeoutMax  = flag.Int("tmax", 0, "maximum injected timeout for proxying request (ms)")
+	timeoutSize = flag.Int("tsize", 0, "responce size in bytes, when timeout injected")
 )
 
 func main() {
@@ -62,6 +66,8 @@ func main() {
 		*verbose = true
 	}
 
+	ir := proxy.NewIntRange(*timeoutMin, *timeoutMin)
+
 	for {
 		conn, err := listener.AcceptTCP()
 		if err != nil {
@@ -80,6 +86,9 @@ func main() {
 
 		p.Matcher = matcher
 		p.Replacer = replacer
+
+		p.Timeout = ir
+		p.TimeoutSize = *timeoutSize
 
 		p.Nagles = *nagles
 		p.OutputHex = *hex

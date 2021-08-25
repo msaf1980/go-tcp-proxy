@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"syscall"
-	"time"
 
 	proxy "github.com/msaf1980/go-tcp-proxy"
 )
@@ -113,12 +112,6 @@ func main() {
 	go sigHandler()
 
 	for {
-		if atomic.LoadInt32(&proxy.ConDropEnable) > 0 {
-			// don't accept new connection
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-
 		conn, err := listener.AcceptTCP()
 		if err != nil {
 			logger.Warn("Failed to accept connection '%s'", err)

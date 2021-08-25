@@ -11,6 +11,8 @@ import (
 
 var ConDropEnable int32 = 0
 
+var connections int32 = 0
+
 type IntRange struct {
 	min, max int
 	r        *rand.Rand
@@ -156,6 +158,21 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 		byteFormat = "%s"
 	}
 
+	conns := atomic.AddInt32(&connections, 1)
+
+	if atomic.LoadInt32(&ConDropEnable) > 0 {
+		if conns > 10000 {
+			p.Log.Info("Too many connections, close")
+			p.lconn.Close()
+			p.rconn.Close()
+		} else {
+			p.Log.Info("Timeout new connection")
+			time.Sleep(5 * time.Minute)
+		}
+		atomic.AddInt32(&connections, -1)
+		return
+	}
+
 	//directional copy (64k buffer)
 	buff := make([]byte, 0xffff)
 	for {
@@ -211,4 +228,6 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 
 		p.timeoutSize += n
 	}
+
+	atomic.AddInt32(&connections, -1)
 }

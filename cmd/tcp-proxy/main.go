@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"regexp"
 	"strings"
+	"sync/atomic"
+	"syscall"
 
 	proxy "github.com/msaf1980/go-tcp-proxy"
 )
@@ -23,7 +26,7 @@ var (
 	veryverbose = flag.Bool("vv", false, "display server actions and all tcp data")
 	nagles      = flag.Bool("n", false, "disable nagles algorithm")
 	hex         = flag.Bool("h", false, "output hex")
-	colors      = flag.Bool("c", false, "output ansi colors")
+	colors      = flag.Bool("color", false, "output ansi colors")
 	unwrapTLS   = flag.Bool("unwrap-tls", false, "remote connection with TLS exposed unencrypted locally")
 	match       = flag.String("match", "", "match regex (in the form 'regex')")
 	replace     = flag.String("replace", "", "replace regex (in the form 'regex~replacer')")
@@ -34,7 +37,39 @@ var (
 
 	conTimeoutMin = flag.Int("ctmin", 0, "minimal injected connection timeout (ms)")
 	conTimeoutMax = flag.Int("ctmax", 0, "maximum injected connection timeout (ms)")
+
+	conTimeoutEnable = flag.Bool("-c", true, "enable connection timeout by default (can be changed in runtime with SIGUSR1")
 )
+
+func sigHandler() {
+	var quit bool
+
+	sig := make(chan os.Signal)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGUSR1)
+
+	// foreach signal received
+	for signal := range sig {
+		//      logEvent(lognotice, sys, "Signal received: "+signal.String())
+
+		switch signal {
+		case syscall.SIGINT, syscall.SIGTERM:
+			quit = true
+		case syscall.SIGHUP, syscall.SIGUSR1:
+			if atomic.LoadInt32(&proxy.ConTimeoutEnable) > 0 {
+				atomic.StoreInt32(&proxy.ConTimeoutEnable, 0)
+				logger.Info("go-tcp-proxy disable connection timeout")
+			} else {
+				atomic.StoreInt32(&proxy.ConTimeoutEnable, 1)
+				logger.Info("go-tcp-proxy enable connection timeout")
+			}
+			quit = false
+		}
+
+		if quit {
+			os.Exit(0)
+		}
+	}
+}
 
 func main() {
 	flag.Parse()
@@ -71,6 +106,12 @@ func main() {
 
 	conTimeoutRand := proxy.NewIntRange(*conTimeoutMin, *conTimeoutMin)
 	timeoutRand := proxy.NewIntRange(*timeoutMin, *timeoutMin)
+	if !*conTimeoutEnable {
+		proxy.ConTimeoutEnable = 0
+	}
+
+	// start the signal monitoring routine
+	go sigHandler()
 
 	for {
 		conn, err := listener.AcceptTCP()

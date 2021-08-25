@@ -5,8 +5,11 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"sync/atomic"
 	"time"
 )
+
+var ConTimeoutEnable int32 = 1
 
 type IntRange struct {
 	min, max int
@@ -93,7 +96,7 @@ func (p *Proxy) Start() {
 	defer p.lconn.Close()
 
 	conTimeout := p.ConTimeout.Random()
-	if conTimeout > 0 {
+	if conTimeout > 0 && atomic.LoadInt32(&ConTimeoutEnable) > 0 {
 		p.Log.Info("Timeout for new connection %v ms", conTimeout)
 		time.Sleep(time.Duration(conTimeout * int(time.Millisecond)))
 	}

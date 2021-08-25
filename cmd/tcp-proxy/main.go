@@ -31,6 +31,9 @@ var (
 	timeoutMin  = flag.Int("tmin", 0, "minimal injected timeout for proxying request (ms)")
 	timeoutMax  = flag.Int("tmax", 0, "maximum injected timeout for proxying request (ms)")
 	timeoutSize = flag.Int("tsize", 0, "responce size in bytes, when timeout injected")
+
+	conTimeoutMin = flag.Int("ctmin", 0, "minimal injected connection timeout (ms)")
+	conTimeoutMax = flag.Int("ctmax", 0, "maximum injected connection timeout (ms)")
 )
 
 func main() {
@@ -66,7 +69,8 @@ func main() {
 		*verbose = true
 	}
 
-	ir := proxy.NewIntRange(*timeoutMin, *timeoutMin)
+	conTimeoutRand := proxy.NewIntRange(*conTimeoutMin, *conTimeoutMin)
+	timeoutRand := proxy.NewIntRange(*timeoutMin, *timeoutMin)
 
 	for {
 		conn, err := listener.AcceptTCP()
@@ -87,8 +91,10 @@ func main() {
 		p.Matcher = matcher
 		p.Replacer = replacer
 
-		p.Timeout = ir
+		p.Timeout = timeoutRand
 		p.TimeoutSize = *timeoutSize
+
+		p.ConTimeout = conTimeoutRand
 
 		p.Nagles = *nagles
 		p.OutputHex = *hex

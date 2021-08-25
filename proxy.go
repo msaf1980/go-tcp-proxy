@@ -57,6 +57,8 @@ type Proxy struct {
 	Timeout     *IntRange
 	TimeoutSize int
 	timeoutSize int
+
+	ConTimeout *IntRange
 }
 
 // New - Create a new Proxy instance. Takes over local connection passed in,
@@ -89,6 +91,12 @@ type setNoDelayer interface {
 // Start - open connection to remote and start proxying data.
 func (p *Proxy) Start() {
 	defer p.lconn.Close()
+
+	conTimeout := p.ConTimeout.Random()
+	if conTimeout > 0 {
+		p.Log.Info("Timeout for new connection %v ms", conTimeout)
+		time.Sleep(time.Duration(conTimeout * int(time.Millisecond)))
+	}
 
 	var err error
 	//connect to remote

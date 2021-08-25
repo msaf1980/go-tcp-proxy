@@ -26,7 +26,7 @@ var (
 	veryverbose = flag.Bool("vv", false, "display server actions and all tcp data")
 	nagles      = flag.Bool("n", false, "disable nagles algorithm")
 	hex         = flag.Bool("h", false, "output hex")
-	colors      = flag.Bool("color", false, "output ansi colors")
+	colors      = flag.Bool("c", false, "output ansi colors")
 	unwrapTLS   = flag.Bool("unwrap-tls", false, "remote connection with TLS exposed unencrypted locally")
 	match       = flag.String("match", "", "match regex (in the form 'regex')")
 	replace     = flag.String("replace", "", "replace regex (in the form 'regex~replacer')")
@@ -37,8 +37,6 @@ var (
 
 	conTimeoutMin = flag.Int("ctmin", 0, "minimal injected connection timeout (ms)")
 	conTimeoutMax = flag.Int("ctmax", 0, "maximum injected connection timeout (ms)")
-
-	conTimeoutEnable = flag.Bool("-c", true, "enable connection timeout by default (can be changed in runtime with SIGUSR1")
 )
 
 func sigHandler() {
@@ -106,9 +104,6 @@ func main() {
 
 	conTimeoutRand := proxy.NewIntRange(*conTimeoutMin, *conTimeoutMin)
 	timeoutRand := proxy.NewIntRange(*timeoutMin, *timeoutMin)
-	if !*conTimeoutEnable {
-		proxy.ConTimeoutEnable = 0
-	}
 
 	// start the signal monitoring routine
 	go sigHandler()

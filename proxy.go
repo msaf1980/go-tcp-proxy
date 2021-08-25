@@ -161,6 +161,8 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 	for {
 		if atomic.LoadInt32(&ConDropEnable) > 0 {
 			// drop connection
+			p.lconn.Close()
+			p.rconn.Close()
 			break
 		}
 

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	proxy "github.com/msaf1980/go-tcp-proxy"
 )
@@ -35,8 +36,7 @@ var (
 	timeoutMax  = flag.Int("tmax", 0, "maximum injected timeout for proxying request (ms)")
 	timeoutSize = flag.Int("tsize", 0, "responce size in bytes, when timeout injected")
 
-	conTimeoutMin = flag.Int("ctmin", 0, "minimal injected connection timeout (ms)")
-	conTimeoutMax = flag.Int("ctmax", 0, "maximum injected connection timeout (ms)")
+	conDropEnable = flag.Bool("d", false, "drop existing connections and not accept new connections")
 )
 
 func sigHandler() {
@@ -53,12 +53,12 @@ func sigHandler() {
 		case syscall.SIGINT, syscall.SIGTERM:
 			quit = true
 		case syscall.SIGHUP, syscall.SIGUSR1:
-			if atomic.LoadInt32(&proxy.ConTimeoutEnable) > 0 {
-				atomic.StoreInt32(&proxy.ConTimeoutEnable, 0)
-				logger.Info("go-tcp-proxy disable connection timeout")
+			if atomic.LoadInt32(&proxy.ConDropEnable) > 0 {
+				atomic.StoreInt32(&proxy.ConDropEnable, 0)
+				logger.Info("go-tcp-proxy disable connections drop")
 			} else {
-				atomic.StoreInt32(&proxy.ConTimeoutEnable, 1)
-				logger.Info("go-tcp-proxy enable connection timeout")
+				atomic.StoreInt32(&proxy.ConDropEnable, 1)
+				logger.Info("go-tcp-proxy enable connections drop")
 			}
 			quit = false
 		}
@@ -102,13 +102,23 @@ func main() {
 		*verbose = true
 	}
 
-	conTimeoutRand := proxy.NewIntRange(*conTimeoutMin, *conTimeoutMin)
 	timeoutRand := proxy.NewIntRange(*timeoutMin, *timeoutMin)
+	if *conDropEnable {
+		atomic.StoreInt32(&proxy.ConDropEnable, 1)
+	} else {
+		atomic.StoreInt32(&proxy.ConDropEnable, 0)
+	}
 
 	// start the signal monitoring routine
 	go sigHandler()
 
 	for {
+		if atomic.LoadInt32(&proxy.ConDropEnable) > 0 {
+			// don't accept new connection
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
 		conn, err := listener.AcceptTCP()
 		if err != nil {
 			logger.Warn("Failed to accept connection '%s'", err)
@@ -129,8 +139,6 @@ func main() {
 
 		p.Timeout = timeoutRand
 		p.TimeoutSize = *timeoutSize
-
-		p.ConTimeout = conTimeoutRand
 
 		p.Nagles = *nagles
 		p.OutputHex = *hex

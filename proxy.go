@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var ConTimeoutEnable int32 = 1
+var ConDropEnable int32 = 0
 
 type IntRange struct {
 	min, max int
@@ -60,8 +60,6 @@ type Proxy struct {
 	Timeout     *IntRange
 	TimeoutSize int
 	timeoutSize int
-
-	ConTimeout *IntRange
 }
 
 // New - Create a new Proxy instance. Takes over local connection passed in,
@@ -94,12 +92,6 @@ type setNoDelayer interface {
 // Start - open connection to remote and start proxying data.
 func (p *Proxy) Start() {
 	defer p.lconn.Close()
-
-	conTimeout := p.ConTimeout.Random()
-	if conTimeout > 0 && atomic.LoadInt32(&ConTimeoutEnable) > 0 {
-		p.Log.Info("Timeout for new connection %v ms", conTimeout)
-		time.Sleep(time.Duration(conTimeout * int(time.Millisecond)))
-	}
 
 	var err error
 	//connect to remote
@@ -167,6 +159,11 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 	//directional copy (64k buffer)
 	buff := make([]byte, 0xffff)
 	for {
+		if atomic.LoadInt32(&ConDropEnable) > 0 {
+			// drop connection
+			break
+		}
+
 		if p.TimeoutSize > 0 && p.timeoutSize >= p.TimeoutSize {
 			// inject next read timeout
 			timeout := p.Timeout.Random()
